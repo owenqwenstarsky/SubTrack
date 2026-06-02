@@ -35,7 +35,7 @@ export const emptyValues: SubscriptionFormValues = {
 
 type FieldErrors = Partial<Record<keyof SubscriptionFormValues, string>>;
 
-function validate(values: SubscriptionFormValues): FieldErrors {
+export function validateSubscriptionForm(values: SubscriptionFormValues): FieldErrors {
   const errors: FieldErrors = {};
   if (!values.name.trim()) errors.name = 'Name is required';
 
@@ -64,7 +64,7 @@ function validate(values: SubscriptionFormValues): FieldErrors {
   return errors;
 }
 
-function toInput(values: SubscriptionFormValues): SubscriptionInput {
+export function subscriptionFormToInput(values: SubscriptionFormValues): SubscriptionInput {
   return {
     name: values.name.trim(),
     description: values.description.trim() || null,
@@ -110,7 +110,7 @@ export function SubscriptionForm({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextErrors = validate(values);
+    const nextErrors = validateSubscriptionForm(values);
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       return;
@@ -119,7 +119,7 @@ export function SubscriptionForm({
     setServerError(null);
     setSubmitting(true);
     try {
-      await onSubmit(toInput(values));
+      await onSubmit(subscriptionFormToInput(values));
     } catch (error) {
       setServerError(
         error instanceof Error ? error.message : 'Something went wrong',

@@ -237,7 +237,7 @@ type Group = {
   items: TimelinePayment[];
 };
 
-function groupByMonth(payments: TimelinePayment[]): Group[] {
+export function groupByMonth(payments: TimelinePayment[]): Group[] {
   const map = new Map<string, Group>();
   const labelFormatter = new Intl.DateTimeFormat(undefined, {
     month: 'long',

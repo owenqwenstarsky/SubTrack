@@ -382,7 +382,7 @@ function EmptyState() {
   );
 }
 
-function hostnameOf(url: string): string {
+export function hostnameOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
   } catch {
@@ -390,7 +390,7 @@ function hostnameOf(url: string): string {
   }
 }
 
-function monthlyEquivalent(sub: Subscription): number {
+export function monthlyEquivalent(sub: Subscription): number {
   const amount = Number(sub.amount) || 0;
   const count = sub.billingIntervalCount || 1;
   switch (sub.billingInterval) {
