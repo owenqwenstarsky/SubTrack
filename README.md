@@ -70,7 +70,34 @@ Protected API routes accept either:
 
 ## Production
 
-Build the web app:
+### Docker
+
+Run the app and PostgreSQL together with Docker Compose:
+
+```bash
+APP_PASSWORD="change-me" \
+SESSION_SECRET="change-this-long-random-secret" \
+docker compose up --build
+```
+
+Then open `http://localhost:8080`.
+
+Or build and run only the app container against an existing database:
+
+```bash
+docker build -t subtrack .
+docker run --rm -p 8080:80 \
+  -e DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/subtrack?schema=public" \
+  -e APP_PASSWORD="change-me" \
+  -e SESSION_SECRET="change-this-long-random-secret" \
+  subtrack
+```
+
+The container serves the built Vite app with NGINX, reverse-proxies `/api` to the Express API running on port `3000` inside the container, and runs `prisma migrate deploy` on startup.
+
+### Manual
+
+Build the server and web app:
 
 ```bash
 npm run build
@@ -79,10 +106,10 @@ npm run build
 Then start the server:
 
 ```bash
-npm run start
+NODE_ENV=production npm --workspace server run start:prod
 ```
 
-When `NODE_ENV=production`, the server serves the built web app from `web/dist`.
+When `NODE_ENV=production`, the server can also serve the built web app from `web/dist`.
 
 ## Workspace READMEs
 
