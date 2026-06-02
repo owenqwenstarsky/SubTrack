@@ -72,12 +72,20 @@ Protected API routes accept either:
 
 ### Docker
 
-Run the app and PostgreSQL together with Docker Compose:
+Run the app and PostgreSQL together with Docker Compose using the GHCR image:
 
 ```bash
 APP_PASSWORD="change-me" \
 SESSION_SECRET="change-this-long-random-secret" \
-docker compose up --build
+docker compose -f docker-compose.ghcr.yml up
+```
+
+To build the image locally instead:
+
+```bash
+APP_PASSWORD="change-me" \
+SESSION_SECRET="change-this-long-random-secret" \
+docker compose -f docker-compose.build.yml up --build
 ```
 
 Then open `http://localhost:8080`.
