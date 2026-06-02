@@ -17,11 +17,11 @@ function apiUrl(instance: SubTrackInstance, path: string) {
 function extractCookie(headers: Headers): string | null {
   const setCookie = headers.get('set-cookie');
   if (!setCookie) return null;
-  return setCookie
-    .split(',')
-    .map((part) => part.trim())
-    .find((part) => part.startsWith('subtrack_session='))
-    ?.split(';')[0] ?? null;
+  for (const part of setCookie.split(',')) {
+    const cookie = part.trim();
+    if (cookie.startsWith('subtrack_session=')) return cookie.split(';')[0];
+  }
+  return null;
 }
 
 async function apiRequest<T>(instance: SubTrackInstance, path: string, options: ApiOptions = {}): Promise<T> {
