@@ -17,13 +17,13 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-export const subscriptionCreateSchema = z.object({
+const subscriptionBaseSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(1000).optional().nullable(),
   amount: z.coerce.number().positive(),
-  currency: z.string().trim().min(3).max(3).default('USD'),
+  currency: z.string().trim().min(3).max(3),
   billingInterval: z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']),
-  billingIntervalCount: z.coerce.number().int().positive().default(1),
+  billingIntervalCount: z.coerce.number().int().positive(),
   firstPaymentDate: dateString,
   nextPaymentDate: dateString.optional().nullable(),
   category: z.string().trim().max(100).optional().nullable(),
@@ -31,7 +31,12 @@ export const subscriptionCreateSchema = z.object({
   notes: z.string().trim().max(5000).optional().nullable(),
 });
 
-export const subscriptionUpdateSchema = subscriptionCreateSchema.partial().refine(
+export const subscriptionCreateSchema = subscriptionBaseSchema.extend({
+  currency: subscriptionBaseSchema.shape.currency.default('USD'),
+  billingIntervalCount: subscriptionBaseSchema.shape.billingIntervalCount.default(1),
+});
+
+export const subscriptionUpdateSchema = subscriptionBaseSchema.partial().refine(
   (data) => Object.keys(data).length > 0,
   'At least one field is required',
 );
