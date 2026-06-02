@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { Prisma } from '@prisma/client';
 
 process.env.NODE_ENV = 'test';
@@ -8,8 +9,8 @@ process.env.APP_PASSWORD = 'test-password';
 process.env.SESSION_SECRET = 'test-session-secret';
 process.env.MAX_GENERATED_PAYMENTS = '5';
 
-const { createApp } = await import('../src/server/app.js');
-type AppPrisma = import('../src/server/app.js').AppPrisma;
+const { createApp } = await import('../src/app.js');
+type AppPrisma = import('../src/app.js').AppPrisma;
 
 type SubscriptionRow = {
   id: string;
@@ -99,7 +100,7 @@ async function start(prisma = makePrisma().prisma) {
   });
   const address = server.address();
   assert.equal(typeof address, 'object');
-  const baseUrl = `http://127.0.0.1:${address!.port}`;
+  const baseUrl = `http://127.0.0.1:${(address as AddressInfo).port}`;
   return { baseUrl, server };
 }
 

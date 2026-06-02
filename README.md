@@ -2,6 +2,12 @@
 
 Self-hostable single-user subscription tracker.
 
+## Project layout
+
+- `web/` - Vite/React web app
+- `server/` - Express API server and Prisma schema
+- `mobile/` - Expo mobile app
+
 ## Setup
 
 1. Install dependencies:
@@ -18,11 +24,11 @@ Self-hostable single-user subscription tracker.
    ```
 4. Start API server:
    ```bash
-   npm run dev
+   npm run dev:server
    ```
 5. In another terminal, start Vite:
    ```bash
-   npm run dev:vite
+   npm run dev:web
    ```
 
 ## API

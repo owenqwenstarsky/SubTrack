@@ -17,6 +17,8 @@ mobile/web-build/
 # Prisma
 prisma/*.db
 prisma/*.db-journal
+server/prisma/*.db
+server/prisma/*.db-journal
 
 # Logs
 npm-debug.log*

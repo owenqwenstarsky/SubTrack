@@ -1,5 +1,5 @@
-import 'dotenv/config';
 import path from 'node:path';
+import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -13,11 +13,14 @@ import { serializeSubscription } from './serializers.js';
 
 export type AppPrisma = typeof prismaClient;
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ quiet: true });
+dotenv.config({ path: path.resolve(__dirname, '../../.env'), quiet: true });
+
 export function createApp(options: { prisma?: AppPrisma } = {}) {
 const app = express();
 const prisma = options.prisma ?? prismaClient;
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const clientDistPath = path.resolve(__dirname, '../../dist');
+const clientDistPath = path.resolve(__dirname, '../../web/dist');
 const appPassword = process.env.APP_PASSWORD;
 const sessionSecret = process.env.SESSION_SECRET;
 const maxGeneratedPayments = Number(process.env.MAX_GENERATED_PAYMENTS ?? 1000);
@@ -246,7 +249,10 @@ app.get('/api/timeline', requireAuth, async (req, res) => {
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(clientDistPath));
-  app.get('*', (_req, res) => res.sendFile(path.join(clientDistPath, 'index.html')));
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
 }
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
