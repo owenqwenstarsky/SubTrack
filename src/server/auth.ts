@@ -2,29 +2,49 @@ import crypto from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 
 const COOKIE_NAME = 'subtrack_session';
-const sessions = new Set<string>();
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const sessions = new Map<string, { csrfToken: string }>();
+
+const cookieOptions = {
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: process.env.NODE_ENV === 'production',
+  signed: true,
+  maxAge: 1000 * 60 * 60 * 24 * 30,
+};
 
 export function createSession(res: Response) {
   const token = crypto.randomBytes(32).toString('hex');
-  sessions.add(token);
-  res.cookie(COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    signed: true,
-    maxAge: 1000 * 60 * 60 * 24 * 30,
-  });
+  const csrfToken = crypto.randomBytes(32).toString('hex');
+  sessions.set(token, { csrfToken });
+  res.cookie(COOKIE_NAME, token, cookieOptions);
+  return { csrfToken };
 }
 
 export function destroySession(req: Request, res: Response) {
   const token = req.signedCookies?.[COOKIE_NAME];
   if (token) sessions.delete(token);
-  res.clearCookie(COOKIE_NAME);
+  res.clearCookie(COOKIE_NAME, cookieOptions);
+}
+
+export function hasValidSession(req: Request): boolean {
+  const token = req.signedCookies?.[COOKIE_NAME];
+  return typeof token === 'string' && sessions.has(token);
+}
+
+export function hasValidPasswordHeader(req: Request): boolean {
+  const headerPassword = req.header('x-subtrack-password');
+  return !!process.env.APP_PASSWORD && headerPassword === process.env.APP_PASSWORD;
+}
+
+export function getCsrfToken(req: Request): string | null {
+  const token = req.signedCookies?.[COOKIE_NAME];
+  if (typeof token !== 'string') return null;
+  return sessions.get(token)?.csrfToken ?? null;
 }
 
 export function isAuthenticated(req: Request): boolean {
-  const token = req.signedCookies?.[COOKIE_NAME];
-  return typeof token === 'string' && sessions.has(token);
+  return hasValidSession(req) || hasValidPasswordHeader(req);
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -32,5 +52,25 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
+  next();
+}
+
+export function requireCsrf(req: Request, res: Response, next: NextFunction) {
+  if (SAFE_METHODS.has(req.method) || req.path === '/api/auth/login' || hasValidPasswordHeader(req)) {
+    next();
+    return;
+  }
+
+  if (!hasValidSession(req)) {
+    next();
+    return;
+  }
+
+  const csrfToken = getCsrfToken(req);
+  if (!csrfToken || req.header('x-csrf-token') !== csrfToken) {
+    res.status(403).json({ error: 'Invalid CSRF token' });
+    return;
+  }
+
   next();
 }

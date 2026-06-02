@@ -5,6 +5,9 @@ node_modules/
 dist/
 build/
 .vite/
+mobile/.expo/
+mobile/.expo-shared/
+mobile/web-build/
 
 # Environment files
 .env

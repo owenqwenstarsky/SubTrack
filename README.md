@@ -28,3 +28,13 @@ Self-hostable single-user subscription tracker.
 ## API
 
 All subscription and timeline routes require login first with `POST /api/auth/login` using the password in `APP_PASSWORD`.
+
+## Mobile app
+
+An Expo scaffold lives in `mobile/`. It supports storing multiple SubTrack instances by URL/password and includes mobile API/persistence helpers plus placeholder screens for a future UI implementation.
+
+```bash
+cd mobile
+npm install
+npm run start
+```

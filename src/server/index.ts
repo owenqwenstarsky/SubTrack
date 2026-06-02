@@ -6,7 +6,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma.js';
-import { createSession, destroySession, isAuthenticated, requireAuth } from './auth.js';
+import { createSession, destroySession, getCsrfToken, isAuthenticated, requireAuth, requireCsrf } from './auth.js';
 import { addInterval, daysUntil, normalizeNextPaymentDate } from './dateUtils.js';
 import { loginSchema, subscriptionCreateSchema, subscriptionUpdateSchema, timelineQuerySchema } from './validation.js';
 import { serializeSubscription } from './serializers.js';
@@ -16,27 +16,70 @@ const port = Number(process.env.PORT ?? 3000);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDistPath = path.resolve(__dirname, '../../dist');
 const appPassword = process.env.APP_PASSWORD;
-const sessionSecret = process.env.SESSION_SECRET ?? 'development-secret-change-me';
+const sessionSecret = process.env.SESSION_SECRET;
+const maxGeneratedPayments = Number(process.env.MAX_GENERATED_PAYMENTS ?? 1000);
+
+if (process.env.NODE_ENV === 'production' && !sessionSecret) {
+  throw new Error('SESSION_SECRET is required in production');
+}
 
 if (!appPassword) {
   console.warn('APP_PASSWORD is not set. Login will be disabled until it is configured.');
 }
 
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
-app.use(cookieParser(sessionSecret));
+const configuredOrigins = process.env.ALLOWED_ORIGINS?.split(',').map((origin) => origin.trim()).filter(Boolean);
+const allowedOrigins = new Set(configuredOrigins ?? (process.env.NODE_ENV === 'production' ? [] : [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+]));
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
+app.use(express.json({ limit: '100kb' }));
+app.use(cookieParser(sessionSecret ?? 'development-secret-change-me'));
+app.use(requireCsrf);
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/auth/login', (req, res) => {
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const loginWindowMs = 15 * 60 * 1000;
+const maxLoginAttempts = 5;
+
+function loginRateLimit(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const now = Date.now();
+  const key = req.ip ?? req.socket.remoteAddress ?? 'unknown';
+  const existing = loginAttempts.get(key);
+  const entry = !existing || existing.resetAt <= now ? { count: 0, resetAt: now + loginWindowMs } : existing;
+
+  if (entry.count >= maxLoginAttempts) {
+    res.setHeader('Retry-After', Math.ceil((entry.resetAt - now) / 1000));
+    res.status(429).json({ error: 'Too many login attempts' });
+    return;
+  }
+
+  entry.count += 1;
+  loginAttempts.set(key, entry);
+  next();
+}
+
+app.post('/api/auth/login', loginRateLimit, (req, res) => {
   const result = loginSchema.safeParse(req.body);
   if (!result.success) return res.status(400).json({ error: result.error.flatten() });
   if (!appPassword || result.data.password !== appPassword) return res.status(401).json({ error: 'Invalid password' });
 
-  createSession(res);
-  res.json({ authenticated: true });
+  const { csrfToken } = createSession(res);
+  loginAttempts.delete(req.ip ?? req.socket.remoteAddress ?? 'unknown');
+  res.json({ authenticated: true, csrfToken });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -46,6 +89,12 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   res.json({ authenticated: isAuthenticated(req) });
+});
+
+app.get('/api/auth/csrf', requireAuth, (req, res) => {
+  const csrfToken = getCsrfToken(req);
+  if (!csrfToken) return res.status(400).json({ error: 'CSRF token is only available for cookie sessions' });
+  res.json({ csrfToken });
 });
 
 app.get('/api/subscriptions', requireAuth, async (_req, res) => {
@@ -91,7 +140,7 @@ app.get('/api/subscriptions/:id/details', requireAuth, async (req, res) => {
   const pastPayments = [];
   let paymentDate = new Date(subscription.firstPaymentDate);
 
-  while (paymentDate < today) {
+  while (paymentDate < today && pastPayments.length < maxGeneratedPayments) {
     pastPayments.push({
       paymentDate: new Date(paymentDate),
       amount: subscription.amount.toString(),
@@ -173,7 +222,7 @@ app.get('/api/timeline', requireAuth, async (req, res) => {
     const occurrences = [];
     let paymentDate = new Date(subscription.nextPaymentDate);
 
-    while (paymentDate <= horizon) {
+    while (paymentDate <= horizon && occurrences.length < maxGeneratedPayments) {
       occurrences.push({
         subscription: serializeSubscription(subscription),
         paymentDate,
@@ -200,6 +249,6 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(port, () => {
-  console.log(`Subtrack API listening on http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Subtrack API listening on http://0.0.0.0:${port}`);
 });

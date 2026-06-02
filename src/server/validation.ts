@@ -1,9 +1,17 @@
 import { z } from 'zod';
 
-const dateString = z.string().refine(
-  (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isNaN(Date.parse(value)),
-  'Expected an ISO date or YYYY-MM-DD date',
-);
+const minDate = Date.parse('2000-01-01T00:00:00.000Z');
+const maxDate = Date.parse('2100-01-01T00:00:00.000Z');
+
+const dateString = z.string()
+  .refine(
+    (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isNaN(Date.parse(value)),
+    'Expected an ISO date or YYYY-MM-DD date',
+  )
+  .refine((value) => {
+    const time = Date.parse(value);
+    return !Number.isNaN(time) && time >= minDate && time <= maxDate;
+  }, 'Date must be between 2000-01-01 and 2100-01-01');
 
 export const loginSchema = z.object({
   password: z.string().min(1),

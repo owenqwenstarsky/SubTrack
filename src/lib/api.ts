@@ -56,14 +56,33 @@ export type SubscriptionDetails = {
   };
 };
 
+let csrfToken: string | null = null;
+
+function isUnsafeMethod(method?: string) {
+  return !['GET', 'HEAD', 'OPTIONS'].includes((method ?? 'GET').toUpperCase());
+}
+
+async function getCsrfToken() {
+  if (csrfToken) return csrfToken;
+  const response = await fetch('/api/auth/csrf', { credentials: 'include' });
+  if (!response.ok) throw new Error(`Failed to get CSRF token with status ${response.status}`);
+  const body = await response.json() as { csrfToken: string };
+  csrfToken = body.csrfToken;
+  return csrfToken;
+}
+
 async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers);
+  headers.set('Content-Type', 'application/json');
+
+  if (isUnsafeMethod(options.method) && path !== '/api/auth/login') {
+    headers.set('X-CSRF-Token', await getCsrfToken());
+  }
+
   const response = await fetch(path, {
     ...options,
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {
@@ -81,15 +100,19 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T
   return response.json() as Promise<T>;
 }
 
-export function login(password: string) {
-  return apiRequest<{ authenticated: true }>('/api/auth/login', {
+export async function login(password: string) {
+  const result = await apiRequest<{ authenticated: true; csrfToken: string }>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({ password }),
   });
+  csrfToken = result.csrfToken;
+  return result;
 }
 
-export function logout() {
-  return apiRequest<{ authenticated: false }>('/api/auth/logout', { method: 'POST' });
+export async function logout() {
+  const result = await apiRequest<{ authenticated: false }>('/api/auth/logout', { method: 'POST' });
+  csrfToken = null;
+  return result;
 }
 
 export function getAuthStatus() {
