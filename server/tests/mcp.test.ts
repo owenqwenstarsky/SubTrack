@@ -8,6 +8,7 @@ process.env.NODE_ENV = 'test';
 process.env.APP_PASSWORD = 'test-password';
 process.env.SESSION_SECRET = 'test-session-secret';
 process.env.MAX_GENERATED_PAYMENTS = '5';
+process.env.MCP_ENABLED = 'true';
 
 const { createApp } = await import('../src/app.js');
 type AppPrisma = import('../src/app.js').AppPrisma;

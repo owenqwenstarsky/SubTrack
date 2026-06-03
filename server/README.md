@@ -27,6 +27,7 @@ Important values:
 - `SESSION_SECRET` - cookie signing secret; required in production
 - `ALLOWED_ORIGINS` - comma-separated allowed browser origins for CORS
 - `MAX_GENERATED_PAYMENTS` - cap for generated history/timeline payments
+- `MCP_ENABLED` - set to `true` to enable the `/api/mcp` endpoint; defaults to disabled
 - `PORT` - API server port, defaults to `3000`
 
 ## API authentication
@@ -36,7 +37,7 @@ Protected REST routes require one of:
 - cookie session auth from `POST /api/auth/login`, with CSRF protection for mutating browser requests
 - `x-subtrack-password` header matching `APP_PASSWORD`, useful for mobile and script clients
 
-The MCP endpoint requires non-browser password auth with either `x-subtrack-password: <APP_PASSWORD>` or `Authorization: Bearer <APP_PASSWORD>`.
+The MCP endpoint is disabled unless `MCP_ENABLED=true`. When enabled, it requires non-browser password auth with either `x-subtrack-password: <APP_PASSWORD>` or `Authorization: Bearer <APP_PASSWORD>`.
 
 ## Main routes
 
@@ -57,7 +58,7 @@ The MCP endpoint requires non-browser password auth with either `x-subtrack-pass
 
 ## MCP
 
-Configure MCP-capable clients with the shared API endpoint:
+Set `MCP_ENABLED=true`, then configure MCP-capable clients with the shared API endpoint:
 
 ```json
 {

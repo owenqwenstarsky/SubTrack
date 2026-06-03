@@ -171,7 +171,9 @@ app.get('/api/timeline', requireAuth, async (req, res) => {
   res.json(await getTimeline(prisma, query.data, { maxGeneratedPayments }));
 });
 
-mountMcpRoutes(app, { prisma, maxGeneratedPayments });
+if (process.env.MCP_ENABLED === 'true') {
+  mountMcpRoutes(app, { prisma, maxGeneratedPayments });
+}
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(clientDistPath));
