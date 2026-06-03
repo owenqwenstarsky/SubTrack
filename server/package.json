@@ -9,13 +9,14 @@
     "start": "tsx src/index.ts",
     "start:prod": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/api.test.ts",
-    "test:coverage": "node --experimental-test-coverage --import tsx --test tests/api.test.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:coverage": "node --experimental-test-coverage --import tsx --test tests/*.test.ts",
     "prisma:generate": "cd .. && prisma generate --schema server/prisma/schema.prisma",
     "prisma:migrate": "cd .. && prisma migrate dev --schema server/prisma/schema.prisma",
     "prisma:deploy": "cd .. && prisma migrate deploy --schema server/prisma/schema.prisma"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/client": "^6.19.3",
     "cookie-parser": "latest",
     "cors": "latest",

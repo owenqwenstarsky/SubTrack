@@ -32,9 +32,22 @@ export function hasValidSession(req: Request): boolean {
   return typeof token === 'string' && sessions.has(token);
 }
 
-export function hasValidPasswordHeader(req: Request): boolean {
+export function getPasswordFromRequest(req: Request): string | null {
   const headerPassword = req.header('x-subtrack-password');
-  return !!process.env.APP_PASSWORD && headerPassword === process.env.APP_PASSWORD;
+  if (headerPassword) return headerPassword;
+
+  const authorization = req.header('authorization');
+  const match = authorization?.match(/^Bearer\s+(.+)$/i);
+  return match?.[1] ?? null;
+}
+
+export function hasValidPasswordCredential(req: Request): boolean {
+  const credential = getPasswordFromRequest(req);
+  return !!process.env.APP_PASSWORD && credential === process.env.APP_PASSWORD;
+}
+
+export function hasValidPasswordHeader(req: Request): boolean {
+  return hasValidPasswordCredential(req);
 }
 
 export function getCsrfToken(req: Request): string | null {
@@ -56,7 +69,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 export function requireCsrf(req: Request, res: Response, next: NextFunction) {
-  if (SAFE_METHODS.has(req.method) || req.path === '/api/auth/login' || hasValidPasswordHeader(req)) {
+  if (SAFE_METHODS.has(req.method) || req.path === '/api/auth/login' || hasValidPasswordCredential(req)) {
     next();
     return;
   }

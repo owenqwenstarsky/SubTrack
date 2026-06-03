@@ -68,6 +68,19 @@ Protected API routes accept either:
 - a browser cookie session created by `POST /api/auth/login`, or
 - the `x-subtrack-password` header, used by the mobile app and other non-browser clients
 
+Subtrack also exposes a Streamable HTTP MCP endpoint at `/api/mcp` for agent clients. It uses the same `APP_PASSWORD` via `x-subtrack-password` or `Authorization: Bearer <APP_PASSWORD>`:
+
+```json
+{
+  "mcpServers": {
+    "subtrack": {
+      "url": "http://localhost:3000/api/mcp",
+      "headers": { "x-subtrack-password": "change-me" }
+    }
+  }
+}
+```
+
 ## Production
 
 ### Docker

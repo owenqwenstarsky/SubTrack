@@ -4,12 +4,11 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import { Prisma } from '@prisma/client';
 import { prisma as prismaClient } from './prisma.js';
 import { createSession, destroySession, getCsrfToken, isAuthenticated, requireAuth, requireCsrf } from './auth.js';
-import { addInterval, daysUntil, normalizeNextPaymentDate } from './dateUtils.js';
 import { loginSchema, subscriptionCreateSchema, subscriptionUpdateSchema, timelineQuerySchema } from './validation.js';
-import { serializeSubscription } from './serializers.js';
+import { createSubscription, deleteSubscription, getSubscription, getSubscriptionDetails, getTimeline, listSubscriptions, NotFoundError, updateSubscription } from './subscriptionService.js';
+import { mountMcpRoutes } from './mcp/http.js';
 
 export type AppPrisma = typeof prismaClient;
 
@@ -104,116 +103,63 @@ app.get('/api/auth/csrf', requireAuth, (req, res) => {
 });
 
 app.get('/api/subscriptions', requireAuth, async (_req, res) => {
-  const subscriptions = await prisma.subscription.findMany({ orderBy: [{ nextPaymentDate: 'asc' }, { name: 'asc' }] });
-  res.json({ subscriptions: subscriptions.map(serializeSubscription) });
+  res.json(await listSubscriptions(prisma));
 });
 
 app.post('/api/subscriptions', requireAuth, async (req, res) => {
   const result = subscriptionCreateSchema.safeParse(req.body);
   if (!result.success) return res.status(400).json({ error: result.error.flatten() });
 
-  const data = result.data;
-  const firstPaymentDate = new Date(data.firstPaymentDate);
-  const nextPaymentDate = normalizeNextPaymentDate(
-    firstPaymentDate,
-    data.billingInterval,
-    data.billingIntervalCount,
-    data.nextPaymentDate ? new Date(data.nextPaymentDate) : undefined,
-  );
-
-  const subscription = await prisma.subscription.create({
-    data: { ...data, website: data.website || null, firstPaymentDate, nextPaymentDate, amount: new Prisma.Decimal(data.amount) },
-  });
-
-  res.status(201).json({ subscription: serializeSubscription(subscription) });
+  res.status(201).json(await createSubscription(prisma, result.data));
 });
 
 app.get('/api/subscriptions/:id', requireAuth, async (req, res) => {
   const id = String(req.params.id);
-  const subscription = await prisma.subscription.findUnique({ where: { id } });
-  if (!subscription) return res.status(404).json({ error: 'Subscription not found' });
-  res.json({ subscription: serializeSubscription(subscription) });
+  try {
+    res.json(await getSubscription(prisma, id));
+  } catch (error) {
+    if (error instanceof NotFoundError) return res.status(404).json({ error: error.message });
+    throw error;
+  }
 });
 
 app.get('/api/subscriptions/:id/details', requireAuth, async (req, res) => {
   const id = String(req.params.id);
-  const subscription = await prisma.subscription.findUnique({ where: { id } });
-  if (!subscription) return res.status(404).json({ error: 'Subscription not found' });
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const pastPayments = [];
-  let paymentDate = new Date(subscription.firstPaymentDate);
-
-  while (paymentDate < today && pastPayments.length < maxGeneratedPayments) {
-    pastPayments.push({
-      paymentDate: new Date(paymentDate),
-      amount: subscription.amount.toString(),
-      currency: subscription.currency,
-    });
-    paymentDate = addInterval(paymentDate, subscription.billingInterval, subscription.billingIntervalCount);
+  try {
+    res.json(await getSubscriptionDetails(prisma, id, { maxGeneratedPayments }));
+  } catch (error) {
+    if (error instanceof NotFoundError) return res.status(404).json({ error: error.message });
+    throw error;
   }
-
-  pastPayments.sort((a, b) => b.paymentDate.getTime() - a.paymentDate.getTime());
-
-  const totalPaid = subscription.amount.mul(pastPayments.length).toString();
-
-  res.json({
-    subscription: serializeSubscription(subscription),
-    pastPayments,
-    stats: {
-      paymentsMade: pastPayments.length,
-      totalPaid,
-      currency: subscription.currency,
-      daysUntilNextPayment: daysUntil(subscription.nextPaymentDate),
-    },
-  });
 });
 
 app.put('/api/subscriptions/:id', requireAuth, async (req, res) => {
   const id = String(req.params.id);
-  const existing = await prisma.subscription.findUnique({ where: { id } });
-  if (!existing) return res.status(404).json({ error: 'Subscription not found' });
+  try {
+    await getSubscription(prisma, id);
+  } catch (error) {
+    if (error instanceof NotFoundError) return res.status(404).json({ error: error.message });
+    throw error;
+  }
 
   const result = subscriptionUpdateSchema.safeParse(req.body);
   if (!result.success) return res.status(400).json({ error: result.error.flatten() });
 
-  const data = result.data;
-  if (Object.keys(req.body ?? {}).length === 0) return res.status(400).json({ error: 'At least one field is required' });
-
-  const firstPaymentDate = data.firstPaymentDate ? new Date(data.firstPaymentDate) : existing.firstPaymentDate;
-  const billingInterval = data.billingInterval ?? existing.billingInterval;
-  const billingIntervalCount = data.billingIntervalCount ?? existing.billingIntervalCount;
-  const nextPaymentDate = data.nextPaymentDate
-    ? new Date(data.nextPaymentDate)
-    : data.firstPaymentDate || data.billingInterval || data.billingIntervalCount
-      ? normalizeNextPaymentDate(firstPaymentDate, billingInterval, billingIntervalCount)
-      : undefined;
-
-  const subscription = await prisma.subscription.update({
-    where: { id },
-    data: {
-      ...data,
-      website: data.website === '' ? null : data.website,
-      amount: data.amount !== undefined ? new Prisma.Decimal(data.amount) : undefined,
-      firstPaymentDate: data.firstPaymentDate ? firstPaymentDate : undefined,
-      nextPaymentDate,
-    },
-  });
-
-  res.json({ subscription: serializeSubscription(subscription) });
+  try {
+    res.json(await updateSubscription(prisma, id, result.data));
+  } catch (error) {
+    if (error instanceof NotFoundError) return res.status(404).json({ error: error.message });
+    throw error;
+  }
 });
 
 app.delete('/api/subscriptions/:id', requireAuth, async (req, res) => {
   const id = String(req.params.id);
   try {
-    await prisma.subscription.delete({ where: { id } });
+    await deleteSubscription(prisma, id);
     res.status(204).send();
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return res.status(404).json({ error: 'Subscription not found' });
-    }
+    if (error instanceof NotFoundError) return res.status(404).json({ error: error.message });
     throw error;
   }
 });
@@ -222,30 +168,10 @@ app.get('/api/timeline', requireAuth, async (req, res) => {
   const query = timelineQuerySchema.safeParse(req.query);
   if (!query.success) return res.status(400).json({ error: query.error.flatten() });
 
-  const horizon = new Date();
-  horizon.setMonth(horizon.getMonth() + query.data.months);
-
-  const subscriptions = await prisma.subscription.findMany();
-  const payments = subscriptions.flatMap((subscription) => {
-    const occurrences = [];
-    let paymentDate = new Date(subscription.nextPaymentDate);
-
-    while (paymentDate <= horizon && occurrences.length < maxGeneratedPayments) {
-      occurrences.push({
-        subscription: serializeSubscription(subscription),
-        paymentDate,
-        daysUntil: daysUntil(paymentDate),
-        amount: subscription.amount.toString(),
-        currency: subscription.currency,
-      });
-      paymentDate = addInterval(paymentDate, subscription.billingInterval, subscription.billingIntervalCount);
-    }
-
-    return occurrences;
-  }).sort((a, b) => a.paymentDate.getTime() - b.paymentDate.getTime());
-
-  res.json({ payments });
+  res.json(await getTimeline(prisma, query.data, { maxGeneratedPayments }));
 });
+
+mountMcpRoutes(app, { prisma, maxGeneratedPayments });
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(clientDistPath));

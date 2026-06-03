@@ -31,10 +31,12 @@ Important values:
 
 ## API authentication
 
-Protected routes require one of:
+Protected REST routes require one of:
 
 - cookie session auth from `POST /api/auth/login`, with CSRF protection for mutating browser requests
 - `x-subtrack-password` header matching `APP_PASSWORD`, useful for mobile and script clients
+
+The MCP endpoint requires non-browser password auth with either `x-subtrack-password: <APP_PASSWORD>` or `Authorization: Bearer <APP_PASSWORD>`.
 
 ## Main routes
 
@@ -50,18 +52,54 @@ Protected routes require one of:
 - `PUT /api/subscriptions/:id`
 - `DELETE /api/subscriptions/:id`
 - `GET /api/timeline`
+- `POST /api/mcp` - Streamable HTTP MCP endpoint
+- `GET /api/mcp` / `DELETE /api/mcp` - protocol-compatible MCP transport handlers
+
+## MCP
+
+Configure MCP-capable clients with the shared API endpoint:
+
+```json
+{
+  "mcpServers": {
+    "subtrack": {
+      "url": "http://localhost:3000/api/mcp",
+      "headers": { "x-subtrack-password": "change-me" }
+    }
+  }
+}
+```
+
+Bearer auth is also supported for clients that prefer a single authorization header:
+
+```json
+{
+  "mcpServers": {
+    "subtrack": {
+      "url": "http://localhost:3000/api/mcp",
+      "headers": { "Authorization": "Bearer change-me" }
+    }
+  }
+}
+```
+
+Tools: `list_subscriptions`, `search_subscriptions`, `get_subscription`, `get_subscription_details`, `create_subscription`, `update_subscription`, `delete_subscription`, `get_payment_timeline`, and `summarize_spending`.
+
+Resources: `subtrack://subscriptions`, `subtrack://subscriptions/{id}`, and `subtrack://timeline/upcoming?months={months}`. Prompts: `subscription_audit` and `add_subscription_from_receipt`.
 
 ## Structure
 
 - `src/index.ts` - process entrypoint and graceful shutdown
 - `src/app.ts` - Express app, middleware, and routes
+- `src/subscriptionService.ts` - shared subscription business operations used by REST and MCP
+- `src/mcp/` - MCP server/tool definitions and Streamable HTTP route mounting
 - `src/auth.ts` - sessions, password auth, and CSRF helpers
 - `src/dateUtils.ts` - recurring payment date calculations
 - `src/prisma.ts` - Prisma Client instance
 - `src/serializers.ts` - API response serialization
 - `src/validation.ts` - Zod request schemas
 - `prisma/schema.prisma` - database schema
-- `tests/api.test.ts` - Node test runner API tests
+- `tests/api.test.ts` and `tests/mcp.test.ts` - Node test runner API and MCP tests
 
 ## Scripts
 
